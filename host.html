@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magic Grind - Host Bot Interface</title>
+    <style>
+        :root {
+            --primary-color: #6a1b9a;
+            --secondary-color: #9c27b0;
+            --accent-color: #e1bee7;
+            --background-color: #f3e5f5;
+            --text-color: #333;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: var(--background-color);
+            margin: 0;
+            padding: 20px;
+            color: var(--text-color);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .host-panel {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .session-info {
+            grid-column: 1 / -1;
+            text-align: center;
+            background: var(--primary-color);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .timer {
+            font-size: 2em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .prize-pool {
+            font-size: 1.5em;
+            color: #ffd700;
+        }
+
+        .announcements {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .announcement {
+            background: var(--accent-color);
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        .winners-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .winner-card {
+            background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stats-panel {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        button {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        button:hover {
+            background: var(--secondary-color);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="session-info">
+            <h2>Current Session: <span id="session-id">Loading...</span></h2>
+            <div class="timer" id="timer">00:00</div>
+            <div class="prize-pool">Prize Pool: <span id="prize-pool">0</span> MG</div>
+        </div>
+
+        <div class="host-panel">
+            <h3>Session Control</h3>
+            <button id="start-session-btn">Start New Session</button>
+            <button id="end-session-btn">End Current Session</button>
+            <div class="stats-panel">
+                <div class="stat-card">
+                    <h4>Active Players</h4>
+                    <div class="stat-value" id="active-players">0</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Tickets Sold</h4>
+                    <div class="stat-value" id="tickets-sold">0</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="host-panel">
+            <h3>Announcements</h3>
+            <div class="announcements" id="announcements">
+                <!-- Announcements will be dynamically added here -->
+            </div>
+        </div>
+
+        <div class="host-panel">
+            <h3>Latest Winners</h3>
+            <ul class="winners-list" id="winners-list">
+                <!-- Winners will be dynamically added here -->
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        class HostBotInterface {
+            constructor() {
+                this.sessionActive = false;
+                this.initializeElements();
+                this.setupEventListeners();
+                this.startPolling();
+            }
+
+            initializeElements() {
+                this.elements = {
+                    sessionId: document.getElementById('session-id'),
+                    timer: document.getElementById('timer'),
+                    prizePool: document.getElementById('prize-pool'),
+                    startBtn: document.getElementById('start-session-btn'),
+                    endBtn: document.getElementById('end-session-btn'),
+                    activePlayers: document.getElementById('active-players'),
+                    ticketsSold: document.getElementById('tickets-sold'),
+                    announcements: document.getElementById('announcements'),
+                    winnersList: document.getElementById('winners-list')
+                };
+            }
+
+            setupEventListeners() {
+                this.elements.startBtn.addEventListener('click', () => this.startSession());
+                this.elements.endBtn.addEventListener('click', () => this.endSession());
+            }
+
+            async startPolling() {
+                setInterval(() => this.updateSessionStatus(), 1000);
+                setInterval(() => this.updateAnnouncements(), 5000);
+                setInterval(() => this.updateWinners(), 10000);
+            }
+
+            async startSession() {
+                try {
+                    const response = await fetch('/host/start-session', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': localStorage.getItem('authToken')
+                        }
+                    });
+
+                    if (response.ok) {
+                        this.sessionActive = true;
+                        this.elements.startBtn.disabled = true;
+                        this.elements.endBtn.disabled = false;
+                        this.showNotification('Session started successfully!');
+                    }
+                } catch (error) {
+                    this.showNotification('Failed to start session', true);
+                }
+            }
+
+            async endSession() {
+                try {
+                    const response = await fetch('/host/end-session', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': localStorage.getItem('authToken')
+                        }
+                    });
+
+                    if (response.ok) {
+                        this.sessionActive = false;
+                        this.elements.startBtn.disabled = false;
+                        this.elements.endBtn.disabled = true;
+                        this.showNotification('Session ended successfully!');
+                    }
+                } catch (error) {
+                    this.showNotification('Failed to end session', true);
+                }
+            }
+
+            async updateSessionStatus() {
+                try {
+                    const response = await fetch('/host/session-status');
+                    const data = await response.json();
+
+                    this.elements.sessionId.textContent = data.session_id || 'No Active Session';
+                    this.elements.timer.textContent = this.formatTime(data.time_remaining);
+                    this.elements.prizePool.textContent = data.prize_pool.toFixed(2);
+                    this.elements.activePlayers.textContent = data.active_players;
+                    this.elements.ticketsSold.textContent = data.tickets_sold;
+
+                    this.sessionActive = !!data.session_id;
+                    this.elements.startBtn.disabled = this.sessionActive;
+                    this.elements.endBtn.disabled = !this.sessionActive;
+                } catch (error) {
+                    console.error('Failed to update session status:', error);
+                }
+            }
+
+            async updateAnnouncements() {
+                try {
+                    const response = await fetch('/host/announcements');
+                    const data = await response.json();
+
+                    this.elements.announcements.innerHTML = data.announcements
+                        .map(announcement => `
+                            <div class="announcement">
+                                <div class="announcement-time">${this.formatDateTime(announcement.time)}</div>
+                                <div class="announcement-message">${announcement.message}</div>
+                            </div>
+                        `).join('');
+                } catch (error) {
+                    console.error('Failed to update announcements:', error);
+                }
+            }
+
+            async updateWinners() {
+                try {
+                    const response = await fetch('/host/winners');
+                    const data = await response.json();
+
+                    this.elements.winnersList.innerHTML = data.winners
+                        .map(winner => `
+                            <li class="winner-card">
+                                <div class="winner-info">
+                                    <div class="winner-name">${winner.username}</div>
+                                    <div class="winner-matches">Matched: ${winner.matches} numbers</div>
+                                </div>
+                                <div class="winner-prize">${winner.prize} MG</div>
+                            </li>
+                        `).join('');
+                } catch (error) {
+                    console.error('Failed to update winners:', error);
+                }
+            }
+
+            formatTime(minutes) {
+                const hrs = Math.floor(minutes / 60);
+                const mins = minutes % 60;
+                return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+            }
+
+            formatDateTime(dateString) {
+                const date = new Date(dateString);
+                return date.toLocaleTimeString();
+            }
+
+            showNotification(message, isError = false) {
+                const notification = document.createElement('div');
+                notification.className = `notification ${isError ? 'error' : 'success'}`;
+                notification.textContent = message;
+                document.body.appendChild(notification);
+                setTimeout(() => notification.remove(), 5000);
+            }
+        }
+
+        // Initialize the interface when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new HostBotInterface();
+        });
+    </script>
+</body>
+</html>
